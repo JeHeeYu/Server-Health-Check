@@ -1,3 +1,4 @@
+from command.command_handler import CommandHandler
 from monitors import CpuMonitor, RamMonitor, DiskMonitor, GpuMonitor
 from concurrent.futures import ThreadPoolExecutor
 from utils import SERVER_URL, SERVER_CODE
@@ -45,6 +46,29 @@ def start_client():
         def disconnect():
             print("Disconnected!")
 
+        @sio.on('execute_command')
+        def on_execute_command(data):
+            target_code = data.get('code')
+
+            if target_code != SERVER_CODE:
+                return
+
+            command = data.get('command')
+            timestamp = data.get('timestamp')
+            print(f"[execute_command] Received command: {command}, timestamp: {timestamp}")
+
+            output = CommandHandler.execute(command)
+            print(f"[execute_command] Result:\n{output}")
+
+            print("Jehee emit")
+            sio.emit('command_result', {
+                'serverId': SERVER_CODE,
+                'command': command,
+                'result': output
+            })
+
+
+
         try:
             sio.connect(SERVER_URL)
         except Exception as e:
@@ -57,7 +81,7 @@ def start_client():
                 if sio.connected:
                     status = get_status()
                     sio.emit('update-status', status)
-                    print("Send status:", status)
+                    # print("Send status:", status)
                 else:
                     print("Lost connection, retrying...")
                     break
