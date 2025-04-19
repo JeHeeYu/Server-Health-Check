@@ -14,7 +14,7 @@ class DiskMonitor:
                 used_percent = (1 - free / total) * 100
                 free_mb = free / 1024 / 1024
                 return {
-                    'usage': f"{used_percent:.2f}",
+                    'usage': f"{used_percent:.1f}",
                     'free': f"{free_mb:.0f}"
                 }
             except FileNotFoundError:

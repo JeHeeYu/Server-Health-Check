@@ -1,43 +1,71 @@
+from monitors import CpuMonitor, RamMonitor, DiskMonitor, GpuMonitor
+from concurrent.futures import ThreadPoolExecutor
+from utils import SERVER_URL, SERVER_CODE
 import socketio
 import time
-from monitors import CpuMonitor, RamMonitor, DiskMonitor, GpuMonitor
-from utils import SERVER_URL, SERVER_CODE
 
-sio = socketio.Client()
 cpu = CpuMonitor()
 ram = RamMonitor()
 disk = DiskMonitor()
 gpu = GpuMonitor()
 
-@sio.event
-def connect():
-    print('server connected')
-
-@sio.event
-def disconnect():
-    print('server disconnected')
-
 def get_status():
+    cpu_result = cpu.get_usage()
+    gpu_result = gpu.get_usage()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = {
+            'ram': executor.submit(ram.get_usage),
+            'disk': executor.submit(disk.get_usage),
+        }
+
+        result = {'cpu': cpu_result, 'gpu': gpu_result}
+        for key, future in futures.items():
+            try:
+                result[key] = future.result(timeout=1)
+            except Exception:
+                result[key] = 'N/A'
+
     return {
         'code': SERVER_CODE,
-        'status': {
-            'cpu': cpu.get_usage(),
-            'ram': ram.get_usage(),
-            'disk': disk.get_usage(),
-            'gpu': gpu.get_usage()
-        }
+        'status': result
     }
 
-def start_client():
-    sio.connect(SERVER_URL)
 
-    try:
-        while True:
-            status = get_status()
-            sio.emit('update-status', status)
-            print("Send status : ", status)
-            time.sleep(2)
-    except KeyboardInterrupt:
-        print("Close")
-    finally:
-        sio.disconnect()
+def start_client():
+    while True:
+        sio = socketio.Client()
+
+        @sio.event
+        def connect():
+            print("Connected!")
+            sio.emit('init', { 'code': SERVER_CODE })
+
+        @sio.event
+        def disconnect():
+            print("Disconnected!")
+
+        try:
+            sio.connect(SERVER_URL)
+        except Exception as e:
+            print(f"[connect error] {e}")
+            time.sleep(3)
+            continue
+
+        try:
+            while True:
+                if sio.connected:
+                    status = get_status()
+                    sio.emit('update-status', status)
+                    print("Send status:", status)
+                else:
+                    print("Lost connection, retrying...")
+                    break
+        except Exception as e:
+            print(f"[loop error] {e}")
+        finally:
+            try:
+                sio.disconnect()
+            except:
+                pass
+            time.sleep(3)  # 재시도 간격

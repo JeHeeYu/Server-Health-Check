@@ -42,5 +42,5 @@ class GpuMonitor:
             'usage': f"{avg_gpu:.0f}",
             'used': f"{mem_used}",
             'total': f"{mem_total}",
-            'memory': f"{mem_percent:.2f}"
+            'memory': f"{mem_percent:.1f}"
         }

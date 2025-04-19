@@ -11,7 +11,7 @@ class CpuMonitor:
             samples.append(psutil.cpu_percent(interval=0.1) / 100.0)
         avg = sum(samples) / len(samples)
         avg = min(max(avg * self.correction_factor, 0), 1)
-        return f"{avg * 100:.2f}"
+        return f"{avg * 100:.1f}"
 
     def get_info(self):
         return {
