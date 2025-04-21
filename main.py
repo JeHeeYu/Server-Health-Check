@@ -1,4 +1,6 @@
-from client.socket_client import start_client
+from file import start_file_server
+from client.socket_client import SocketClient
 
 if __name__ == '__main__':
-    start_client()
+    start_file_server()
+    SocketClient().run()
