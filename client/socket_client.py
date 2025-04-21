@@ -1,95 +1,90 @@
+import time
+import socketio
+from concurrent.futures import ThreadPoolExecutor
+
 from command.command_handler import CommandHandler
 from monitors import CpuMonitor, RamMonitor, DiskMonitor, GpuMonitor
-from concurrent.futures import ThreadPoolExecutor
 from utils import SERVER_URL, SERVER_CODE
-import socketio
-import time
-
-cpu = CpuMonitor()
-ram = RamMonitor()
-disk = DiskMonitor()
-gpu = GpuMonitor()
-
-def get_status():
-    cpu_result = cpu.get_usage()
-    gpu_result = gpu.get_usage()
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = {
-            'ram': executor.submit(ram.get_usage),
-            'disk': executor.submit(disk.get_usage),
-        }
-
-        result = {'cpu': cpu_result, 'gpu': gpu_result}
-        for key, future in futures.items():
-            try:
-                result[key] = future.result(timeout=1)
-            except Exception:
-                result[key] = 'N/A'
-
-    return {
-        'code': SERVER_CODE,
-        'status': result
-    }
 
 
-def start_client():
-    while True:
-        sio = socketio.Client()
+class SocketClient:
+    def __init__(self):
+        self.sio = socketio.Client()
+        self.cpu = CpuMonitor()
+        self.ram = RamMonitor()
+        self.disk = DiskMonitor()
+        self.gpu = GpuMonitor()
+        self._register_events()
 
-        @sio.event
+    def _register_events(self):
+        @self.sio.event
         def connect():
-            print("Connected!")
-            sio.emit('init', { 'code': SERVER_CODE })
+            self.sio.emit('init', {'serverCode': SERVER_CODE})
 
-        @sio.event
+        @self.sio.event
         def disconnect():
-            print("Disconnected!")
+            pass
 
-        @sio.on('execute_command')
+        @self.sio.on('execute_command')
         def on_execute_command(data):
-            target_code = data.get('code')
-
-            if target_code != SERVER_CODE:
+            if data.get('serverCode') != SERVER_CODE:
                 return
 
             command = data.get('command')
-            timestamp = data.get('timestamp')
-            print(f"[execute_command] Received command: {command}, timestamp: {timestamp}")
+            result = CommandHandler.execute(command)
 
-            output = CommandHandler.execute(command)
-            print(f"[execute_command] Result:\n{output}")
-
-            print("Jehee emit")
-            sio.emit('command_result', {
-                'serverId': SERVER_CODE,
+            self.sio.emit('command_result', {
+                'serverCode': SERVER_CODE,
                 'command': command,
-                'result': output
+                'result': result
             })
 
+    def get_status(self):
+        cpu_usage = self.cpu.get_usage()
+        gpu_usage = self.gpu.get_usage()
 
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {
+                'ram': executor.submit(self.ram.get_usage),
+                'disk': executor.submit(self.disk.get_usage),
+            }
 
-        try:
-            sio.connect(SERVER_URL)
-        except Exception as e:
-            print(f"[connect error] {e}")
-            time.sleep(3)
-            continue
+            status = {
+                'cpu': cpu_usage,
+                'gpu': gpu_usage
+            }
 
-        try:
-            while True:
-                if sio.connected:
-                    status = get_status()
-                    sio.emit('update-status', status)
-                    # print("Send status:", status)
-                else:
-                    print("Lost connection, retrying...")
-                    break
-        except Exception as e:
-            print(f"[loop error] {e}")
-        finally:
+            for key, future in futures.items():
+                try:
+                    status[key] = future.result(timeout=1)
+                except:
+                    status[key] = 'N/A'
+
+        return {
+            'serverCode': SERVER_CODE,
+            'status': status
+        }
+
+    def run(self):
+        while True:
             try:
-                sio.disconnect()
+                self.sio.connect(SERVER_URL)
+            except:
+                time.sleep(3)
+                continue
+
+            try:
+                while self.sio.connected:
+                    self.sio.emit('update-status', self.get_status())
+                    time.sleep(1)
             except:
                 pass
-            time.sleep(3)  # 재시도 간격
+            finally:
+                try:
+                    self.sio.disconnect()
+                except:
+                    pass
+                time.sleep(3)
+
+def start_socket_client():
+    SocketClient().run()

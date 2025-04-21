@@ -2,3 +2,6 @@ psutil
 python-socketio[client]
 tornado>=6.1
 python-dotenv
+fastapi
+uvicorn
+paramiko
