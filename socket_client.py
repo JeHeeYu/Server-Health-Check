@@ -4,8 +4,14 @@ from concurrent.futures import ThreadPoolExecutor
 from config import *
 import socketio
 import time
+import platform
 
-monitor = ResourceMonitor()
+if platform.system() == 'Windows':
+    disk_path = "D:" 
+else:
+    disk_path = "/home"
+
+monitor = ResourceMonitor(disk_drive=disk_path)
 
 def get_status():
     result = monitor.get_all()
