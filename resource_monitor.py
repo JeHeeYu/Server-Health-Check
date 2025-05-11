@@ -52,25 +52,28 @@ class ResourceMonitor:
 
     def get_gpu_usage(self):
         if not gpu_available:
-            return "N/A"
+            return {'usage': 'N/A'}
         try:
             gpus = GPUtil.getGPUs()
             if not gpus:
-                return "N/A"
-            return f"{gpus[0].load * 100:.1f}"
+                return {'usage': 'N/A'}
+            return {'usage': f"{gpus[0].load * 100:.1f}"}
         except Exception:
-            return "N/A"
+            return {'usage': 'N/A'}
 
     def get_network_usage(self, interval=1, link_speed_mbps=1000):
-        net1 = psutil.net_io_counters()
-        time.sleep(interval)
-        net2 = psutil.net_io_counters()
+        try:
+            net1 = psutil.net_io_counters()
+            time.sleep(interval)
+            net2 = psutil.net_io_counters()
 
-        total_bytes = (net2.bytes_sent + net2.bytes_recv) - (net1.bytes_sent + net1.bytes_recv)
-        total_bits = total_bytes * 8
-        speed_bps = total_bits / interval
-        usage_percent = (speed_bps / (link_speed_mbps * 1_000_000)) * 100
-        return f"{usage_percent:.1f}"
+            total_bytes = (net2.bytes_sent + net2.bytes_recv) - (net1.bytes_sent + net1.bytes_recv)
+            total_bits = total_bytes * 8
+            speed_bps = total_bits / interval
+            usage_percent = (speed_bps / (link_speed_mbps * 1_000_000)) * 100
+            return {'usage': f"{usage_percent:.1f}"}
+        except Exception:
+            return {'usage': 'N/A'}
 
 
     def get_all(self):
